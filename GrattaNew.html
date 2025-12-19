@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Gratta & Vinci</title>
+  <meta name="description" content="Gratta e scopri la sorpresa!" />
+  <style>
+    :root{--bg1:#0f172a;--bg2:#111827;--card:#0b1224;--text:#e5e7eb;--muted:#9ca3af;--accent:#22c55e;--accent2:#f59e0b;}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,"Apple Color Emoji","Segoe UI Emoji";
+      background:radial-gradient(1200px 800px at 20% 10%,#1f2937 0%,var(--bg1) 40%,var(--bg2) 100%);color:var(--text);padding:24px;}
+    .wrap{width:min(560px,100%);}
+    .badge{display:inline-flex;gap:10px;align-items:center;padding:10px 14px;border:1px solid rgba(255,255,255,.12);border-radius:999px;background:rgba(255,255,255,.06);font-weight:700;letter-spacing:.2px;}
+    .badge .dot{width:10px;height:10px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#60a5fa);}
+    .card{margin-top:14px;background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.03));border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:18px;box-shadow:0 18px 50px rgba(0,0,0,.45);position:relative;overflow:hidden;}
+    .title{font-size:clamp(22px,3.6vw,28px);margin:2px 0 6px 0;font-weight:900;}
+    .sub{margin:0 0 14px 0;color:var(--muted);line-height:1.35;font-size:14px;}
+   .scratch-area{
+  position:relative;
+  border-radius:18px;
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.10);
+  aspect-ratio: 2 / 3;         /* più “biglietto” verticale */
+  max-height: 720px;
+  background: #111;
+}
+
+.ticket-img{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  object-fit:cover;
+  display:block;
+}
+
+.prize{
+  position:absolute; inset:0;
+  display:grid;
+  place-items:center;
+  padding: 18px;
+  text-align:center;
+  pointer-events:none; /* così non blocca il grattare */
+}
+
+.prize h2{
+  margin:0;
+  font-size: clamp(20px, 4.5vw, 34px);
+  line-height:1.05;
+  letter-spacing:.4px;
+  font-weight:1000;
+  text-transform: uppercase;
+  text-shadow: 0 10px 30px rgba(0,0,0,.55);
+  background: rgba(0,0,0,.55);
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.18);
+}
+
+    .prize h2{margin:0;font-size:clamp(22px,4.2vw,34px);line-height:1.05;letter-spacing:.4px;font-weight:1000;text-transform:uppercase;text-shadow:0 10px 30px rgba(0,0,0,.45);}
+    .prize p{margin:10px 0 0 0;color:rgba(229,231,235,.88);font-weight:700;font-size:14px;}
+    canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;}
+    .hint{margin-top:12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:13px;align-items:center;}
+    button{appearance:none;border:0;background:rgba(255,255,255,.10);color:var(--text);padding:10px 12px;border-radius:12px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,.14);}
+    button:hover{background:rgba(255,255,255,.14);}
+    .done{display:none;margin-top:14px;padding:12px 14px;border-radius:16px;border:1px solid rgba(34,197,94,.25);background:rgba(34,197,94,.10);color:rgba(229,231,235,.95);font-weight:800;}
+    .done span{color:var(--accent);}
+    .footer{margin-top:14px;font-size:12px;color:rgba(156,163,175,.85);text-align:center;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="badge"><span class="dot"></span> Gratta & Vinci virtuale</div>
+    <div class="card">
+      <div class="title">Gratta qui 🎁</div>
+      <p class="sub">Trascina il dito (o il mouse) sull’area argentata per scoprire il messaggio nascosto.</p>
+
+      <div class="scratch-area" id="scratchBox">
+  <!-- immagine del biglietto -->
+  <img class="ticket-img" src="miliardario.png" alt="Gratta e Vinci" />
+
+  <!-- messaggio nascosto -->
+  <div class="prize" aria-live="polite">
+    <div>
+      <h2 id="msg">SVETLANA HA VINTO UN MILIONE</h2>
+    </div>
+  </div>
+
+  <!-- strato da grattare -->
+  <canvas id="scratch"></canvas>
+</div>
+
+
+      <div class="hint">
+        <div>Consiglio: gratta un po’ in più per far apparire tutto.</div>
+        <button id="resetBtn" type="button">Ricomincia</button>
+      </div>
+
+      <div class="done" id="doneBox">✅ Rivelato! <span>Auguri!</span></div>
+      <div class="footer">Suggerimento: apri il link direttamente da WhatsApp.</div>
+    </div>
+  </div>
+
+  <script>
+    const REVEAL_THRESHOLD = 0.45;
+    const COVER_TEXT = "GRATTA QUI";
+
+    const canvas = document.getElementById('scratch');
+    const box = document.getElementById('scratchBox');
+    const resetBtn = document.getElementById('resetBtn');
+    const doneBox = document.getElementById('doneBox');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    let isDrawing = false;
+    let completed = false;
+
+    function resizeCanvas() {
+      const rect = box.getBoundingClientRect();
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      canvas.width = Math.floor(rect.width * dpr);
+      canvas.height = Math.floor(rect.height * dpr);
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawCover();
+      completed = false;
+      doneBox.style.display = 'none';
+    }
+
+    function drawCover() {
+      const w = canvas.getBoundingClientRect().width;
+      const h = canvas.getBoundingClientRect().height;
+      const grad = ctx.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, '#d1d5db');
+      grad.addColorStop(0.35, '#9ca3af');
+      grad.addColorStop(0.7, '#e5e7eb');
+      grad.addColorStop(1, '#6b7280');
+
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.globalAlpha = 0.18;
+      for (let i = 0; i < 140; i++) {
+        ctx.fillStyle = `rgba(0,0,0,${Math.random() * 0.25})`;
+        ctx.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 3, 2 + Math.random() * 3);
+      }
+      ctx.globalAlpha = 1;
+
+      ctx.fillStyle = 'rgba(17,24,39,.9)';
+      ctx.font = '900 22px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(COVER_TEXT, w / 2, h / 2);
+
+      ctx.globalCompositeOperation = 'destination-out';
+    }
+
+    function getPoint(e) {
+      const rect = canvas.getBoundingClientRect();
+      const t = e.touches && e.touches[0];
+      const x = (t ? t.clientX : e.clientX) - rect.left;
+      const y = (t ? t.clientY : e.clientY) - rect.top;
+      return { x, y };
+    }
+
+    function scratchAt(x, y) {
+      if (completed) return;
+      ctx.beginPath();
+      ctx.arc(x, y, 22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function estimateRevealed() {
+      const rect = canvas.getBoundingClientRect();
+      const w = Math.floor(rect.width);
+      const h = Math.floor(rect.height);
+      const sampleW = 220;
+      const sampleH = Math.floor(sampleW * (h / w));
+      const img = ctx.getImageData(0, 0, sampleW, sampleH).data;
+
+      let transparent = 0;
+      const total = img.length / 4;
+      for (let i = 0; i < img.length; i += 4) {
+        if (img[i + 3] < 10) transparent++;
+      }
+      return transparent / total;
+    }
+
+    function maybeComplete() {
+      if (completed) return;
+      if (estimateRevealed() >= REVEAL_THRESHOLD) {
+        completed = true;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.globalCompositeOperation = 'destination-out';
+        doneBox.style.display = 'block';
+      }
+    }
+
+    function onDown(e) { e.preventDefault(); isDrawing = true; const p = getPoint(e); scratchAt(p.x, p.y); }
+    function onMove(e) {
+      if (!isDrawing) return;
+      e.preventDefault();
+      const p = getPoint(e);
+      scratchAt(p.x, p.y);
+      if (!completed && Math.random() < 0.08) maybeComplete();
+    }
+    function onUp(e) { if (!isDrawing) return; e.preventDefault(); isDrawing = false; maybeComplete(); }
+
+    canvas.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+
+    canvas.addEventListener('touchstart', onDown, { passive: false });
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onUp, { passive: false });
+
+    resetBtn.addEventListener('click', resizeCanvas);
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+  </script>
+</body>
+</html>
